@@ -45,16 +45,38 @@ public class ScrollingBackgroundView extends View {
     public interface OnSizeChangedListener {
         /**
          * Will be triggered after {@link android.view.View#onSizeChanged(int, int, int, int)} is called
-         * @param width new width of the view
+         *
+         * @param width  new width of the view
          * @param height new height of the view
          */
         void onSizeChanged(int width, int height);
     }
 
+    /**
+     * type of scale drawable
+     */
+    public enum ScaleType {
+        /**
+         * fit width , scale height
+         */
+        FIT_WIDTH,
+        /**
+         * use self bounds fit width and height
+         */
+        REPEAT
+    }
+
+    private static final ScaleType[] sScaleTypeArray = {
+            ScaleType.FIT_WIDTH,
+            ScaleType.REPEAT
+    };
+
     private Drawable mDrawable;
 
     private int mScrollX;
     private int mScrollY;
+
+    private ScaleType mScaleType = ScaleType.REPEAT;
 
     private OnSizeChangedListener mOnSizeChangedListener;
 
@@ -72,7 +94,6 @@ public class ScrollingBackgroundView extends View {
     }
 
     private void init(Context context, AttributeSet attributeSet) {
-
         if (attributeSet != null) {
             final TypedArray array = context.obtainStyledAttributes(attributeSet, R.styleable.ScrollingBackgroundView);
             try {
@@ -82,6 +103,9 @@ public class ScrollingBackgroundView extends View {
 
                 final Drawable drawable = array.getDrawable(R.styleable.ScrollingBackgroundView_sbv_drawable);
                 setDrawable(drawable);
+
+                final int index = array.getInt(R.styleable.ScrollingBackgroundView_sbv_scaleType, 0);
+                setScaleType(sScaleTypeArray[index]);
 
             } finally {
                 array.recycle();
@@ -93,19 +117,19 @@ public class ScrollingBackgroundView extends View {
      * Set the drawable object manually. There is also an XML attribute `sbv_drawable`
      * If provided via XML the intrinsic bounds will be used.
      * The drawable will be <i>tiled</i> to fill this view
+     *
      * @param drawable to be tiled and drawn as background
      */
     public void setDrawable(Drawable drawable) {
         mDrawable = drawable;
         if (mDrawable != null) {
             final Rect rect = mDrawable.getBounds();
-            if (rect == null
-                    || rect.isEmpty()) {
+            if (rect.isEmpty()) {
                 mDrawable.setBounds(0, 0, mDrawable.getIntrinsicWidth(), mDrawable.getIntrinsicHeight());
             }
             setWillNotDraw(false);
         }
-        postInvalidateOnAnimation();
+        postInvalidate();
     }
 
     /**
@@ -116,7 +140,6 @@ public class ScrollingBackgroundView extends View {
     }
 
     /**
-     *
      * @param listener to be notified when the size changes, or NULL to stop listening
      * @see OnSizeChangedListener
      */
@@ -124,12 +147,22 @@ public class ScrollingBackgroundView extends View {
         this.mOnSizeChangedListener = listener;
     }
 
+    /**
+     * set {@link ScaleType}
+     *
+     * @param scaleType type of scale {@link #mDrawable}
+     * @see ScaleType
+     */
+    public void setScaleType(ScaleType scaleType) {
+        this.mScaleType = scaleType;
+    }
+
     @Override
     public void scrollBy(int x, int y) {
         if (y != 0 || x != 0) {
             mScrollX += x;
             mScrollY += y;
-            postInvalidateOnAnimation();
+            postInvalidate();
         }
     }
 
@@ -139,7 +172,7 @@ public class ScrollingBackgroundView extends View {
                 || mScrollX != x) {
             mScrollX = x;
             mScrollY = y;
-            postInvalidateOnAnimation();
+            postInvalidate();
         }
     }
 
@@ -154,6 +187,7 @@ public class ScrollingBackgroundView extends View {
 
     /**
      * Getter for current {@link #mScrollX}
+     *
      * @return current {@link #mScrollX}
      */
     public int scrollX() {
@@ -162,6 +196,7 @@ public class ScrollingBackgroundView extends View {
 
     /**
      * Getter for current {@link #mScrollY}
+     *
      * @return current {@link #mScrollY}
      */
     public int scrollY() {
@@ -177,6 +212,59 @@ public class ScrollingBackgroundView extends View {
         if (drawable == null) {
             return;
         }
+
+        switch (mScaleType) {
+            case FIT_WIDTH:
+                drawAsFitWidth(drawable, canvas);
+                break;
+            case REPEAT:
+            default:
+                drawAsRepeat(drawable, canvas);
+                break;
+        }
+
+    }
+
+    private void drawAsFitWidth(Drawable drawable, Canvas canvas) {
+
+        final int scrollY = mScrollY;
+
+        final int width = canvas.getWidth();
+        final int height = canvas.getHeight();
+
+        final Rect rect = drawable.getBounds();
+
+        final int drawableWidth = rect.width();
+
+        float radio = width / drawableWidth;
+        int drawableHeight = (int) (radio * rect.height());
+
+        final int startY = start(scrollY, drawableHeight);
+        final int iterationsY = iterations(height, startY, drawableHeight);
+
+        final int save = canvas.save();
+        try {
+
+            canvas.translate(.0F, startY);
+
+            for (int y = 0; y < iterationsY; y++) {
+                // scale drawable to fit width
+                final int save1 = canvas.save();
+                canvas.scale(radio, radio);
+                drawable.draw(canvas);
+                canvas.restoreToCount(save1);
+
+                canvas.translate(.0F, drawableHeight);
+            }
+            canvas.translate(drawableWidth, -(drawableHeight * iterationsY));
+            canvas.translate(.0F, -(drawableHeight * iterationsY));
+
+        } finally {
+            canvas.restoreToCount(save);
+        }
+    }
+
+    private void drawAsRepeat(Drawable drawable, Canvas canvas) {
 
         final int scrollX = mScrollX;
         final int scrollY = mScrollY;

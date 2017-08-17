@@ -47,6 +47,8 @@ scrollingBackgroundView.scrollTo(/* x & y values */);
 
 scrollingBackgroundView.scrollX(); // use this method to retrieve current scroll x value
 scrollingBackgroundView.scrollY(); // use this method to retrieve current scroll y value
+
+scrollingBackgroundView.setScaleType(ScaleType scaleType); // use this method to reset current fit mode
 ```
 
 ```java
